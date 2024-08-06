@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using OfficeOpenXml;
+using OfficeOpenXml.FormulaParsing.Excel.Functions.Text;
 using OfficeOpenXml.Style;
 
 namespace TT.API.Controllers;
@@ -98,6 +99,8 @@ public class TimekeepingController : ControllerBase
                         // Output results
                         Console.WriteLine($"Row {rowIndex}: Working time = {workingHours} hours, Overtime = {overtimeHours} hours");
 
+                        double rounded = Math.Round(workingHours * 2, MidpointRounding.AwayFromZero) / 2;
+
                         var timeKeeping = new TimekeepingResponse
                         {
                             EmployeeId = employeeId,
@@ -108,12 +111,14 @@ public class TimekeepingController : ControllerBase
                             LastPunch = endTimeStr,
                             Weekday = dayOfWeek,    
                             TotalTimeOT = overtimeHours,
-                            TotalTimeWorking = (int)workingHours
+                            TotalTimeWorking = rounded
                         };
 
                         responses.Add(timeKeeping); 
                     }
                 }
+
+                
 
                 if (responses.Count != 0)
                 {
@@ -137,10 +142,10 @@ public class TimekeepingController : ControllerBase
                     responses.ForEach(e =>
                     {
 
-                        workSheet.Cells[$"A{recordIndex}:I{recordIndex}"].Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
-                        workSheet.Cells[$"A{recordIndex}:I{recordIndex}"].Style.Border.Left.Style = ExcelBorderStyle.Thin;
-                        workSheet.Cells[$"A{recordIndex}:I{recordIndex}"].Style.Border.Right.Style = ExcelBorderStyle.Thin;
-                        workSheet.Cells[$"A{recordIndex}:I{recordIndex}"].Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                        workSheet.Cells[$"A{recordIndex}:K{recordIndex}"].Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                        workSheet.Cells[$"A{recordIndex}:K{recordIndex}"].Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                        workSheet.Cells[$"A{recordIndex}:K{recordIndex}"].Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                        workSheet.Cells[$"A{recordIndex}:K{recordIndex}"].Style.Border.Top.Style = ExcelBorderStyle.Thin;
 
                         workSheet.Row(recordIndex).Height = 20;
                         workSheet.Row(recordIndex).Style.WrapText = true;
@@ -167,11 +172,17 @@ public class TimekeepingController : ControllerBase
                         workSheet.Cells[$"G{recordIndex}"].Value = e.LastPunch;
                         workSheet.Cells[$"G{recordIndex}"].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
 
-                        workSheet.Cells[$"H{recordIndex}"].Value = e.TotalTimeWorking;
+                        workSheet.Cells[$"H{recordIndex}"].Value = e.Weekday != "Sunday" ? e.TotalTimeWorking : null;
                         workSheet.Cells[$"H{recordIndex}"].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
 
-                        workSheet.Cells[$"I{recordIndex}"].Value = e.TotalTimeOT;
+                        workSheet.Cells[$"I{recordIndex}"].Value = e.Weekday != "Sunday" ? e.TotalTimeOT : null;
                         workSheet.Cells[$"I{recordIndex}"].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+
+                        workSheet.Cells[$"J{recordIndex}"].Value = e.Weekday == "Sunday" ? e.TotalTimeWorking : null;
+                        workSheet.Cells[$"J{recordIndex}"].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+
+                        workSheet.Cells[$"K{recordIndex}"].Value = e.Weekday == "Sunday" ? e.TotalTimeOT : null;
+                        workSheet.Cells[$"K{recordIndex}"].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
 
                         stt++;
                         recordIndex++;
@@ -180,7 +191,6 @@ public class TimekeepingController : ControllerBase
 
                     var file = excelExport.GetAsByteArray();
                     return File(file, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{fileName}");
-
                 }
             }
         }
@@ -198,31 +208,40 @@ public class TimekeepingController : ControllerBase
         if (dayOfWeek != "Sunday")
         {
             DateTime officeStartDate = startdate.Date.AddHours(7).AddMinutes(30); // 7:30 AM
+
+            DateTime lateDate0_5 = startdate.Date.AddHours(7).AddMinutes(45); // 7:45 AM
+
             DateTime lateDate1 = startdate.Date.AddHours(8).AddMinutes(0); // 8:00 AM
+
             DateTime lateDate2 = startdate.Date.AddHours(8).AddMinutes(30); // 8:30 AM
 
-            if (startdate <= officeStartDate)
+            DateTime lateDate3 = startdate.Date.AddHours(9).AddMinutes(00); // 8:30 AM
+
+
+            if (startdate > officeStartDate && startdate < lateDate0_5)
             {
                 startdate = officeStartDate;
+
             }
 
-            if (startdate > officeStartDate && startdate < lateDate1)
+            if (startdate > lateDate0_5 && startdate < lateDate1)
             {
                 startdate = lateDate1;
             }
+
+            if (startdate > lateDate1 && startdate < lateDate2)
+            {
+                startdate = lateDate3;
+            }
+
         }
         else
         {
             DateTime officeStartDate = startdate.Date.AddHours(8).AddMinutes(30); // 8:30 AM
 
             DateTime lateDate1 = startdate.Date.AddHours(8).AddMinutes(45); // 8:45 AM
+
             DateTime lateDate2 = startdate.Date.AddHours(9).AddMinutes(0); // 8:45 AM
-
-
-            if (startdate <= officeStartDate)
-            {
-                startdate = officeStartDate;
-            }
 
             if (startdate >= officeStartDate & startdate < lateDate1)
             {
@@ -244,13 +263,8 @@ public class TimekeepingController : ControllerBase
         DateTime lunchEnd = startdate.Date.AddHours(13); // 1:00 PM
 
         // Calculate total working time excluding lunch break
-        TimeSpan workingTime = officeEndDate - startdate;
-
-        if (enddate < officeEndDate)
-        {
-            workingTime = enddate - startdate;
-        }
-
+        TimeSpan workingTime = enddate - startdate;
+        
         if (startdate < lunchEnd && enddate > lunchStart)
         {
             TimeSpan lunchBreak = lunchEnd - lunchStart;
@@ -300,7 +314,7 @@ public class TimekeepingResponse
     public string Weekday { get; set; }
     public string FirstPunch { get; set; }
     public string LastPunch { get; set; }
-    public int TotalTimeWorking { get; set; }
+    public double? TotalTimeWorking { get; set; }
     public int TotalTimeOT { get; set; }
 
 }
