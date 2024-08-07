@@ -55,10 +55,13 @@ namespace TT.API.Middlewares
 
         public bool IsAuthorized(string username, string password)
         {
+            var usernameSwagger = _config.GetValue<string>("UsernameSwagger");
+            var passwordSwagger = _config.GetValue<string>("UsernameSwagger");
+
             // Check that username and password are correct
-            return username.Equals("thuytrang")
-                    && password.Equals("thuytrang");
-        }  
+            return username.Equals(usernameSwagger)
+                    && password.Equals(passwordSwagger);
+        }
     }
 
     public static class SwaggerAuthorizeExtensions
